@@ -1,9 +1,14 @@
 from openai import OpenAI
 from dotenv import load_dotenv
 from agent import Agent
+import sys
+import os
+
+# Habilitar colores ANSI en Windows
+os.system('') if sys.platform == 'win32' else None
 
 load_dotenv()
-MODEL="dopenai/gpt-oss-20b"
+MODEL="openai/gpt-oss-20b"
 
 print(f"Mi primer agente de IA ({MODEL})")
 
@@ -16,8 +21,12 @@ client = OpenAI(
     api_key="lm-studio"  # Clave de API de marcador de posición
 )
 
+# Códigos ANSI para colores
+GREEN = "\033[92m"
+RESET = "\033[0m"
+
 while True:
-    user_input = input("Tú: ").strip()
+    user_input = input(f"\n{GREEN}Tú: {RESET}").strip()
     
     # Validaciones
     if not user_input:
