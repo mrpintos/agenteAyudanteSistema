@@ -7,7 +7,6 @@ MODEL="dopenai/gpt-oss-20b"
 
 print(f"Mi primer agente de IA ({MODEL})")
 
-
 agent = Agent()
 
 # --- CONFIGURACIÓN DEL CLIENTE (SIN CAMBIOS) ---
@@ -16,10 +15,11 @@ client = OpenAI(
     base_url="http://localhost:1234/v1",
     api_key="lm-studio"  # Clave de API de marcador de posición
 )
+
 while True:
     user_input = input("Tú: ").strip()
     
-    #Validaciones
+    # Validaciones
     if not user_input:
         continue
     
@@ -27,19 +27,21 @@ while True:
         print("Hasta luego!")
         break
     
-    #Agregar nuestro mensaje al historial
+    # Agregar nuestro mensaje al historial
     agent.messages.append({"role": "user", "content": user_input})
     
     while True:
-        response = client.responses.create(
+        response = client.chat.completions.create(
             model=MODEL,
-            input=agent.messages,
-            tools=agent.tools
+            messages=agent.messages,
+            tools=agent.tools,
+            temperature=0.7,
+            max_tokens=4000
         )
         
         called_tool = agent.process_response(response)
         
-        #Si no se llamo herramienta, tenemos la respuesta final
+        # Si no se llamó herramienta, tenemos la respuesta final
         if not called_tool:
             break
         

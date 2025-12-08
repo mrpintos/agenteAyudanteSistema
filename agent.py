@@ -3,6 +3,9 @@ import json
 
 class Agent:
     def __init__(self):
+        # Configuración de límites para gestión de memoria
+        self.MAX_MESSAGES = 50  # Máximo de mensajes antes de limpiar
+        
         self.setup_tools()
         self.messages = [
             {"role": "system", "content": 
@@ -18,102 +21,87 @@ class Agent:
              
             }
         ]
+        self.TOOLS_FUNCTIONS = {
+            "read_file": self.read_file,
+            "edit_file": self.edit_file,
+            "execute_bash_command": self.execute_bash_command
+        }
     
     def setup_tools(self):
         self.tools = [
-         #   
-         #   {
-         #       "type": "function",
-         #       "name": "list_files_in_dir",
-         #       "description": "Lista los archivos que existen en un directorio dado (por defecto es el directorio actual)",
-         #       "parameters": {
-         #           "type": "object",
-         #           "properties": {
-         #               "directory": {
-         #                   "type": "string",
-         #                   "description": "Directorio para listar (opcional). Por defecto es el directorio actual"
-         #               }
-         #           },
-         #           "required": []
-         #       }
-         #   },
             {
                 "type": "function",
-                "name": "read_file",
-                "description": "Lee el contenido de un archivo en una ruta especificada",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "La ruta del archivo a leer"
-                        }
-                    },
-                    "required": ["path"]
+                "function": {
+                    "name": "read_file",
+                    "description": "Lee el contenido de un archivo en una ruta especificada",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "La ruta del archivo a leer"
+                            }
+                        },
+                        "required": ["path"]
+                    }
                 }
             },
             {
                 "type": "function",
-                "name": "edit_file",
-                "description": "Edita el contenido de un archivo reemplazando prev_text por new_text. Crea el archivo si no existe.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "La ruta del archivo a editar"
+                "function": {
+                    "name": "edit_file",
+                    "description": "Edita el contenido de un archivo reemplazando prev_text por new_text. Crea el archivo si no existe.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "La ruta del archivo a editar"
+                            },
+                            "prev_text": {
+                                "type": "string",
+                                "description": "El texto que se va a buscar para reemplazar (puede ser vacío para archivos nuevos)"
+                            },
+                            "new_text": {
+                                "type": "string",
+                                "description": "El texto que reemplazará a prev_text (o el texto para un archivo nuevo)"
+                            }
                         },
-                        "prev_text": {
-                            "type": "string",
-                            "description": "El texto que se va a buscar para reemplazar (puede ser vacío para archivos nuevos)"
-                        },
-                        "new_text": {
-                            "type": "string",
-                            "description": "El texto que reemplazará a prev_text (o el texto para un archivo nuevo)"
-                        }
-                    },
-                    "required": ["path", "new_text"]
+                        "required": ["path", "new_text"]
+                    }
                 }
             },
             {
                 "type": "function",
-                "name": "execute_bash_command",
-                "description": """Ejecuta un comando bash en el sistema operativo y devuelve el resultado, 
-                con ello puedes inspeccionar el sistema, listar directorios, copiar archivos, mover archivos, etc. 
-                También puedes crear y ejecutar scripts. Todo lo relacionado con el Sistema Operativo y la terminal.""",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "El comando bash a ejecutar con sus argumentos si lo requiere"
-                        }
-                    },
-                    "required": ["command"]
+                "function": {
+                    "name": "execute_bash_command",
+                    "description": "Ejecuta un comando bash en el sistema operativo y devuelve el resultado, con ello puedes inspeccionar el sistema, listar directorios, copiar archivos, mover archivos, etc. También puedes crear y ejecutar scripts.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": "El comando bash a ejecutar con sus argumentos si lo requiere"
+                            }
+                        },
+                        "required": ["command"]
+                    }
                 }
             }
         ]
-        
-    #Definición de herramientas
-    def list_files_in_dir(self, directory="."):
-        print(" ⚙️  Herramienta llamada: list_files_in_dir")
-        try:
-            files = os.listdir(directory)
-            
-            #Asi lo deje en el video. En realidad allá se agrega a un
-            #diccionario entonces no es necesario hacerlo aquí
-            return {"files": files}
-        except Exception as e:
-            return {"error": str(e)}
         
     #Herramienta: Leer archivos
     def read_file(self, path):
         print(" ⚙️  Herramienta llamada: read_file")
         try:
             with open(path, encoding="utf-8") as f:
-                return f.read()
+                content = f.read()
+                # Limitar contenido si es muy grande
+                if len(content) > 10000:
+                    return content[:10000] + "\n... (contenido truncado, archivo muy grande)"
+                return content
         except Exception as e:
-            err = f"Error al leer el archivo {path}"
+            err = f"Error al leer el archivo {path}: {str(e)}"
             print(err)
             return err
         
@@ -152,52 +140,102 @@ class Agent:
         print(" ⚙️  Herramienta llamada: execute_bash_command")
         try:
             result = os.popen(command).read()
+            # Limitar salida si es muy grande
+            if len(result) > 5000:
+                return result[:5000] + "\n... (salida truncada, resultado muy grande)"
             return result
         except Exception as e:
             err = f"Error al ejecutar el comando: {command}"
             print(err)
             return err
+    
+    def _cleanup_messages(self):
+        """Limpia el historial de mensajes si excede límites.
+        Mantiene el mensaje de sistema y las últimas N interacciones."""
+        if len(self.messages) > self.MAX_MESSAGES:
+            # Mantener: sistema + últimas N-1 mensajes
+            system_msg = self.messages[0]
+            self.messages = [system_msg] + self.messages[-(self.MAX_MESSAGES - 1):]
+            print(f"⚠️  Historial de mensajes limpiado (mantenidas últimas {self.MAX_MESSAGES - 1} interacciones)")
+    
+    def handle_tool_call(self, tool_name, tool_input):
+        """Ejecuta una herramienta y maneja errores."""
+        if tool_name not in self.TOOLS_FUNCTIONS:
+            return f"Error: Herramienta '{tool_name}' no encontrada"
+        
+        try:
+            func = self.TOOLS_FUNCTIONS[tool_name]
+            result = func(**tool_input)
+            return result
+        except TypeError as e:
+            return f"Error en argumentos de {tool_name}: {str(e)}"
+        except Exception as e:
+            return f"Error ejecutando {tool_name}: {str(e)}"
 
     def process_response(self, response):
-        #True = si llama a una funcion. False = No hubo llamado.
-        
-        #Almacenar para historial
-        self.messages += response.output
-        
-        for output in response.output:
-            if output.type == "function_call":
-                fn_name = output.name
-                args = json.loads(output.arguments)
-                
-                print(f"    - El modelo considera llamar a la herramienta {fn_name}")
-                print(f"    - Argumentos: {args}")
-                
-                if fn_name == "list_files_in_dir":
-                    result = self.list_files_in_dir(**args)
-                elif fn_name == "read_file":
-                    result = self.read_file(**args)
-                elif fn_name == "edit_file":
-                    result = self.edit_file(**args)
-                elif fn_name == "execute_bash_command":
-                    result = self.execute_bash_command(**args)
+        """Procesa respuesta de OpenAI API.
+        Retorna True si se ejecutó una herramienta, False si es respuesta final."""
+        try:
+            # Manejar respuestas con tool calls
+            if response.choices[0].message.tool_calls:
+                for tool_call in response.choices[0].message.tool_calls:
+                    tool_name = tool_call.function.name
+                    try:
+                        tool_input = json.loads(tool_call.function.arguments)
+                    except json.JSONDecodeError as e:
+                        print(f"❌ Error al parsear argumentos JSON: {e}")
+                        tool_input = {}
                     
-                #Agregar a la memoria la respuesta del llamado
-                self.messages.append({
-                    "type": "function_call_output",
-                    "call_id": output.call_id,
-                    "output": json.dumps({
-                        #Así lo dejé en el video. Creo que queda mejor
-                        #dejarlo como 'result', al aplicar ahora a las
-                        #3 herramientas
-                        "result": result
+                    print(f"    - El modelo considera llamar a la herramienta {tool_name}")
+                    print(f"    - Argumentos: {tool_input}")
+                    
+                    # Ejecutar herramienta con manejo de errores
+                    result = self.handle_tool_call(tool_name, tool_input)
+                    
+                    # Agregar respuesta del asistente con tool call
+                    self.messages.append({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": tool_call.id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": tool_call.function.arguments
+                            }
+                        }]
                     })
-                })
                     
+                    # Agregar resultado de la herramienta
+                    self.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(result) if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
+                    })
+                    
+                    # Mostrar en consola - No hace mostrarlo.
+                    # print(f"[Tool: {tool_name}]")
+                    # print(result)
+                
+                # Limpiar memoria si es necesario
+                self._cleanup_messages()
                 return True
                 
-            elif output.type == "message":
-                #print(f"Asistente: {output.content}")
-                reply = "\n".join(part.text for part in output.content)
-                print(f"Asistente: {reply}")
+            else:
+                # Respuesta de texto normal
+                output_text = response.choices[0].message.content
+                if output_text:
+                    self.messages.append({"role": "assistant", "content": output_text})
+                    print(f"Asistente: {output_text}")
                 
-        return False
+                # Limpiar memoria si es necesario
+                self._cleanup_messages()
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error procesando respuesta: {e}")
+            self.messages.append({
+                "role": "system",
+                "content": f"Error interno: {str(e)}"
+            })
+            return False
