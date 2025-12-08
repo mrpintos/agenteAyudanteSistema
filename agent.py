@@ -1,5 +1,6 @@
 import os
 import json
+import platform
 
 class Agent:
     def __init__(self):
@@ -10,11 +11,13 @@ class Agent:
         self.messages = [
             {"role": "system", "content": 
              """Eres un asistente útil que habla en el idioma que te preguntan y eres conciso con tus respuestas.
-                Puedes usar las siguientes herramientas para ayudar al usuario con tareas relacionadas con el sistema de archivos y la ejecución de comandos bash.
+                Importante antes de usar herramianta para ejecutar comandos en el terminal o manipular archivos, asegúrate de conocer el sistema operativo del usuario con la herramienta get_system_os, para así adaptar los comandos y rutas de archivos.
+                Puedes usar las siguientes herramientas para ayudar al usuario con tareas relacionadas con el sistema de archivos y la ejecución de comandos en el terminal, 
+                para ello tienes que saber qué sistema operativo tiene el usuario y puedes saberlo utilizando la herramienta de ejecución de comandos para verificar el sistema operativo previamente.
                 Cuando uses los las herramientas, si hay alguna operativa que pueda causar daño al sistema (como borrados o modificar archivos), 
                 primero pregunta al usuario para confirmarlo. No hace falta perdir permiso para operativas de búsquda o que muestren información.
                 Intenta siempre usar las herramientas cuando sea posible y necesario.
-                Si la respuesta que das es una lista intenta formatearla como una lista con viñetas.
+                Si la respuesta que das es una lista intenta formatearla como una lista con viñetas, cuando tenga sentido. Si es una lista de un comando terminal intenta dejarla como salida de terminal.
                 Cuando el usuario quiera salir, despídete cortésmente y díle que para salir puede escribir "salir", "exit", "bye" o "sayonara".
            
              """
@@ -24,7 +27,8 @@ class Agent:
         self.TOOLS_FUNCTIONS = {
             "read_file": self.read_file,
             "edit_file": self.edit_file,
-            "execute_bash_command": self.execute_bash_command
+            "execute_terminal_command": self.execute_terminal_command,
+            "get_system_os": self.get_system_os
         }
     
     def setup_tools(self):
@@ -74,17 +78,32 @@ class Agent:
             {
                 "type": "function",
                 "function": {
-                    "name": "execute_bash_command",
-                    "description": "Ejecuta un comando bash en el sistema operativo y devuelve el resultado, con ello puedes inspeccionar el sistema, listar directorios, copiar archivos, mover archivos, etc. También puedes crear y ejecutar scripts.",
+                    "name": "execute_terminal_command",
+                    "description": "Ejecuta un comando en el terminal del sistema operativo y devuelve el resultado, con ello puedes inspeccionar el sistema, listar directorios, copiar archivos, mover archivos, etc. También puedes crear y ejecutar scripts.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "command": {
                                 "type": "string",
-                                "description": "El comando bash a ejecutar con sus argumentos si lo requiere"
+                                "description": "El comando a ejecutar en el terminal con sus argumentos si lo requiere"
                             }
                         },
                         "required": ["command"]
+                    }
+                }
+            }
+            ,
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_system_os",
+                    "description": "Devuelve información sobre el sistema operativo donde corre el programa (plataforma, versión, arquitectura, hostname, python).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+
+                        },
+                        "required": []
                     }
                 }
             }
@@ -136,8 +155,8 @@ class Agent:
             print(err)
             return err
     
-    def execute_bash_command(self, command):
-        print(" ⚙️  Herramienta llamada: execute_bash_command")
+    def execute_terminal_command(self, command):
+        print(" ⚙️  Herramienta llamada: execute_terminal_command")
         try:
             result = os.popen(command).read()
             # Limitar salida si es muy grande
@@ -146,6 +165,24 @@ class Agent:
             return result
         except Exception as e:
             err = f"Error al ejecutar el comando: {command}"
+            print(err)
+            return err
+
+    def get_system_os(self):
+        """Devuelve información básica del sistema operativo y entorno Python."""
+        print("Herramienta llamada: get_system_os")
+        try:
+            info = {
+                "platform": platform.system(),
+                "platform_release": platform.release(),
+                "platform_version": platform.version(),
+                "architecture": platform.machine(),
+                "hostname": platform.node(),
+                "python_version": platform.python_version()
+            }
+            return info
+        except Exception as e:
+            err = f"Error obteniendo info del sistema operativo: {str(e)}"
             print(err)
             return err
     

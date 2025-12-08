@@ -15,6 +15,8 @@ Un resumen claro y visual del propósito y la arquitectura del proyecto.
 - 🧭 **Propósito:** agente REPL que envía el historial de la conversación a una API tipo OpenAI / LM Studio y permite que el modelo invoque "herramientas" (funciones del sistema) para leer/editar archivos y ejecutar comandos bash. Los resultados de las herramientas se reinyectan en el historial para que el modelo genere la respuesta final.
 - 🚪 **Entrypoint:** `main.py` — configura el cliente `OpenAI`, crea la instancia `Agent()` y ejecuta el REPL de usuario.
 - 🧩 **Componente principal:** `Agent` (archivo `agent.py`) — mantiene `self.messages` (historial), `self.tools` (esquema JSON pasado al cliente) y `self.TOOLS_FUNCTIONS` (mapeo nombre → función Python).
+ - 🧩 **Componente principal:** `Agent` (archivo `agent.py`) — mantiene `self.messages` (historial), `self.tools` (esquema JSON pasado al cliente) y `self.TOOLS_FUNCTIONS` (mapeo nombre → función Python).
+ - 🖥️ **Detección de SO:** se añadió la herramienta `get_system_os` que permite al modelo pedir información básica del sistema donde corre el agente (plataforma, versión, arquitectura, hostname y versión de Python).
 - 🔁 **Flujo de datos:** usuario → `agent.messages` → llamada a `client.chat.completions.create(messages=..., tools=...)` → `Agent.process_response(response)` → si el modelo pidió una herramienta, `Agent` la ejecuta, añade el resultado a `messages` con `role: "tool"` y el ciclo repite; si no llamó herramienta, se imprime la respuesta final.
 
 ---
@@ -62,6 +64,10 @@ Un resumen claro y visual del propósito y la arquitectura del proyecto.
 	- Ejecuta un comando en el sistema y devuelve su salida (truncada si es muy larga).
 	- Riesgo de seguridad: ejecución arbitraria de comandos; considerar validación o confirmación.
 
+- `get_system_os(self)`
+	- Devuelve un diccionario con información básica del entorno donde corre el programa: `platform`, `platform_release`, `platform_version`, `architecture`, `hostname`, `python_version`.
+	- Uso seguro: es solo lectura y no modifica el sistema — útil para que el modelo adapte comandos según el SO.
+
 - `_cleanup_messages(self)`
 	- Mantiene el historial acotado: conserva el mensaje `system` y las últimas `N` interacciones cuando se supera `MAX_MESSAGES`.
 
@@ -74,3 +80,20 @@ Un resumen claro y visual del propósito y la arquitectura del proyecto.
 		- Parsea los argumentos JSON, ejecuta la herramienta con `handle_tool_call`, añade al historial un `role: "assistant"` indicando la intención de llamada y luego un `role: "tool"` con el resultado.
 		- Devuelve `True` para que `main.py` repita la llamada y el modelo vea el resultado.
 	- Si no hubo `tool_calls`: añade la respuesta final como `role: "assistant"`, imprime el texto y devuelve `False`.
+
+---
+
+## 📌 Ejemplo rápido
+
+Si quieres probar localmente la nueva herramienta desde el intérprete Python, puedes hacerlo instanciando `Agent` y llamando a `get_system_os()`:
+
+```python
+from agent import Agent
+agent = Agent()
+info = agent.get_system_os()
+print(info)
+# Ejemplo de salida:
+# {'platform': 'Windows', 'platform_release': '11', 'platform_version': '10.0.26200', 'architecture': 'AMD64', 'hostname': 'mi-maquina', 'python_version': '3.13.9'}
+```
+
+Esta herramienta también está registrada en `self.tools` para que el modelo la invoque automáticamente durante la conversación.
