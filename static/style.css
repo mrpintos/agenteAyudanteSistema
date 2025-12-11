@@ -48,3 +48,29 @@ body{margin:0;background:var(--bg);color:#0f172a;display:flex;flex-direction:col
   /* Limitar a ~4 líneas de altura */
   max-height: calc(1.45 * 13px * 4 + 16px);
 }
+
+/* Estilos para tablas generadas desde pipe-tables */
+.pipe-table{
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.pipe-table th, .pipe-table td{
+  border: 1px solid rgba(15,23,42,0.06);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.pipe-table thead th{
+  background: #f6f9fc;
+  font-weight: 600;
+  color: #0f172a;
+}
+.pipe-table tr:nth-child(even) td{
+  background: #fbfdff;
+}
+
+@media (max-width:600px){
+  .pipe-table th, .pipe-table td{padding:6px 8px;font-size:12px}
+}

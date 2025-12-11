@@ -56,6 +56,132 @@
         .replace(/'/g, "&#039;");
     }
 
+    function mdStrongToHtml(text){
+      // simple replacement of **bold** to <strong>
+      return text.replace(/\*\*(.*?)\*\*/g, (_, m) => `<strong>${escapeHtml(m)}</strong>`);
+    }
+
+    function isPipeTable(text){
+      if(!text) return false;
+      const lines = text.split('\n').map(l=>l.trim());
+      // find first line that starts with |
+      const firstIdx = lines.findIndex(l => l.startsWith('|'));
+      if(firstIdx === -1) return false;
+      // require at least header and separator
+      if(lines.length <= firstIdx + 1) return false;
+      const sep = lines[firstIdx+1];
+      // separator like |---|---|
+      if(/^\|?\s*:?[-\s:|]+\s*\|?$/.test(sep)) return true;
+      return false;
+    }
+
+    function renderPipeTable(text){
+      const lines = text.split('\n');
+      // find first pipe line
+      let start = 0;
+      while(start < lines.length && !lines[start].trim().startsWith('|')) start++;
+      if(start >= lines.length) return null;
+      // collect table lines starting at start until a non-pipe line
+      const tableLines = [];
+      for(let i=start;i<lines.length;i++){
+        const l = lines[i];
+        if(l.trim().startsWith('|')) tableLines.push(l.trim()); else break;
+      }
+      if(tableLines.length < 2) return null;
+
+      // parse header and separator
+      const headerLine = tableLines[0];
+      const sepLine = tableLines[1];
+      const headers = headerLine.split('|').slice(1,-1).map(h => h.trim());
+      // build table element
+      const table = document.createElement('table');
+      table.className = 'pipe-table';
+      const thead = document.createElement('thead');
+      const trh = document.createElement('tr');
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.innerHTML = escapeHtml(h);
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      for(let i=2;i<tableLines.length;i++){
+        const cols = tableLines[i].split('|').slice(1,-1).map(c => c.trim());
+        const tr = document.createElement('tr');
+        cols.forEach(c => {
+          const td = document.createElement('td');
+          // convert **bold** inside cells
+          const html = mdStrongToHtml(c);
+          td.innerHTML = html;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      return table;
+    }
+
+    function renderTextWithTables(text){
+      const lines = text.split('\n');
+      const nodes = [];
+      let buffer = [];
+      const isSepLine = (l) => /^\|?\s*[:\-\s|]+\s*\|?$/.test(l.trim());
+
+      for(let i=0;i<lines.length;){
+        const line = lines[i];
+        if(line.trim().startsWith('|') && i+1 < lines.length && isSepLine(lines[i+1])){
+          // flush buffer
+          if(buffer.length){
+            const p = document.createElement('div');
+            const txt = buffer.join('\n');
+            p.innerHTML = mdStrongToHtml(escapeHtml(txt)).replace(/\n/g,'<br>');
+            nodes.push(p);
+            buffer = [];
+          }
+
+          // collect table lines
+          const tableLines = [];
+          tableLines.push(lines[i]);
+          tableLines.push(lines[i+1]);
+          i += 2;
+          while(i < lines.length && lines[i].trim().startsWith('|')){
+            tableLines.push(lines[i]);
+            i++;
+          }
+
+          // build table
+          const headerCols = tableLines[0].split('|').slice(1,-1).map(s=>s.trim());
+          const table = document.createElement('table');
+          table.className = 'pipe-table';
+          const thead = document.createElement('thead');
+          const trh = document.createElement('tr');
+          headerCols.forEach(h=>{ const th = document.createElement('th'); th.innerHTML = escapeHtml(h); trh.appendChild(th); });
+          thead.appendChild(trh); table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          for(let r=2;r<tableLines.length;r++){
+            const cols = tableLines[r].split('|').slice(1,-1).map(s=>s.trim());
+            const tr = document.createElement('tr');
+            cols.forEach(c=>{ const td = document.createElement('td'); td.innerHTML = mdStrongToHtml(c); tr.appendChild(td); });
+            tbody.appendChild(tr);
+          }
+          table.appendChild(tbody);
+          nodes.push(table);
+        } else {
+          buffer.push(line);
+          i++;
+        }
+      }
+      if(buffer.length){
+        const p = document.createElement('div');
+        const txt = buffer.join('\n');
+        p.innerHTML = mdStrongToHtml(escapeHtml(txt)).replace(/\n/g,'<br>');
+        nodes.push(p);
+      }
+      return nodes;
+    }
+
     function isCodeLike(text){
       // kept for possible fallback but not used by default heuristics
       if(!text) return false;
@@ -79,7 +205,15 @@
       // Render as code only when server explicitly requests it or when role is 'tool'.
       const shouldRenderAsCode = displayAs === 'code' || role === 'tool';
 
-      if(shouldRenderAsCode){
+      // If text contains a pipe table, render text and tables preserving surrounding text
+      if(isPipeTable(text)){
+        const nodes = renderTextWithTables(text);
+        if(nodes && nodes.length){
+          nodes.forEach(n => bodyEl.appendChild(n));
+        } else {
+          bodyEl.innerHTML = escapeHtml(text).replace(/\n/g,'<br>');
+        }
+      } else if(shouldRenderAsCode){
         const pre = document.createElement('pre');
         pre.className = 'code-block';
         pre.innerHTML = escapeHtml(text);
