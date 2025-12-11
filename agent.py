@@ -217,6 +217,13 @@ class Agent:
         try:
             # Manejar respuestas con tool calls
             if response.choices[0].message.tool_calls:
+                combined_outputs = []
+                assistant_record = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": []
+                }
+
                 for tool_call in response.choices[0].message.tool_calls:
                     tool_name = tool_call.function.name
                     try:
@@ -224,38 +231,37 @@ class Agent:
                     except json.JSONDecodeError as e:
                         print(f"❌ Error al parsear argumentos JSON: {e}")
                         tool_input = {}
-                    
+
                     print(f"    - El modelo considera llamar a la herramienta {tool_name}")
                     print(f"    - Argumentos: {tool_input}")
-                    
+
                     # Ejecutar herramienta con manejo de errores
                     result = self.handle_tool_call(tool_name, tool_input)
-                    
-                    # Agregar respuesta del asistente con tool call
-                    self.messages.append({
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [{
-                            "id": tool_call.id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": tool_call.function.arguments
-                            }
-                        }]
+
+                    # Registrar la intención de llamar herramientas en el mensaje assistant (metadatos)
+                    assistant_record["tool_calls"].append({
+                        "id": getattr(tool_call, 'id', None),
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": tool_call.function.arguments
+                        }
                     })
-                    
-                    # Agregar resultado de la herramienta
-                    self.messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": str(result) if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
-                    })
-                    
-                    # Mostrar en consola - No hace mostrarlo.
-                    # print(f"[Tool: {tool_name}]")
-                    # print(result)
-                
+
+                    # Formatear resultado y anexarlo al combinado
+                    out_text = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
+                    header = f"== {tool_name} ==\n"
+                    combined_outputs.append(header + out_text)
+
+                # Añadir UNA sola entrada role:tool con todo el output combinado
+                combined_text = "\n\n".join(combined_outputs)
+                self.messages.append({
+                    "role": "tool",
+                    "content": combined_text,
+                    "display_as": "code",
+                    "tool_calls": assistant_record["tool_calls"]
+                })
+
                 # Limpiar memoria si es necesario
                 self._cleanup_messages()
                 return True

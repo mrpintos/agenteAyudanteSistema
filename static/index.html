@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Agente IA — Conversación</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Agente IA</div>
+      <div class="controls">
+        <select id="modelSelect"></select>
+        <button id="changeModelBtn">Cambiar modelo</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- Zona de mensajes: ocupa todo el alto del contenedor (excepto el footer) con scroll propio -->
+      <div id="chatLog" class="chat-log" aria-live="polite"></div>
+    </main>
+
+    <!-- Footer fijo en la parte inferior con el composer -->
+    <footer class="footer">
+      <div class="composer">
+        <textarea id="prompt" placeholder="Escribe tu prompt aquí..." rows="3"></textarea>
+        <div class="actions">
+          <button id="sendBtn" class="primary">Enviar</button>
+          <button id="clearBtn">Limpiar</button>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+    async function fetchModels(){
+      const sel = document.getElementById('modelSelect');
+      sel.innerHTML = '<option>Cargando...</option>';
+      try{
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        sel.innerHTML = '';
+        (data.models || []).forEach(m => {
+          const o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o);
+        });
+      }catch(e){
+        sel.innerHTML = '<option>Error al listar</option>';
+      }
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function isCodeLike(text){
+      // kept for possible fallback but not used by default heuristics
+      if(!text) return false;
+      const lines = text.split('\n');
+      if(lines.length > 1) return true;
+      if(/\b(ps|top|ls|df|du|grep|awk|sed)\b/.test(text)) return true;
+      if(/\|\s*-+\s*\|/.test(text)) return true;
+      return false;
+    }
+
+    function appendMessage(role, text, displayAs){
+      const log = document.getElementById('chatLog');
+      const el = document.createElement('div');
+      el.className = 'msg ' + role;
+      const roleEl = document.createElement('div');
+      roleEl.className = 'role';
+      roleEl.textContent = role;
+      const bodyEl = document.createElement('div');
+      bodyEl.className = 'text';
+
+      // Render as code only when server explicitly requests it or when role is 'tool'.
+      const shouldRenderAsCode = displayAs === 'code' || role === 'tool';
+
+      if(shouldRenderAsCode){
+        const pre = document.createElement('pre');
+        pre.className = 'code-block';
+        pre.innerHTML = escapeHtml(text);
+        bodyEl.appendChild(pre);
+      } else {
+        bodyEl.innerHTML = escapeHtml(text).replace(/\n/g,'<br>');
+      }
+
+      el.appendChild(roleEl);
+      el.appendChild(bodyEl);
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+      fetchModels();
+      document.getElementById('sendBtn').onclick = async ()=>{
+        const prompt = document.getElementById('prompt').value.trim();
+        if(!prompt) return;
+        appendMessage('user', prompt);
+        document.getElementById('prompt').value = '';
+        appendMessage('assistant','...');
+        try{
+          const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt})});
+          const data = await res.json();
+          // Re-renderizar todo el historial devuelto por el servidor (salta el system)
+          const log = document.getElementById('chatLog');
+          log.innerHTML = '';
+          (data.messages || []).forEach(m => {
+            if(m.role && m.role !== 'system') appendMessage(m.role, m.content || (m.text||''), m.display_as);
+          });
+        }catch(e){
+          appendMessage('assistant','Error al contactar con servidor');
+        }
+      };
+
+      document.getElementById('changeModelBtn').onclick = async ()=>{
+        const sel = document.getElementById('modelSelect');
+        const model = sel.value;
+        if(!model) return alert('Selecciona un modelo');
+        try{
+          const res = await fetch('/api/model',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model})});
+          const data = await res.json();
+          alert('Modelo cambiado a: '+data.model);
+        }catch(e){
+          alert('Error al cambiar modelo');
+        }
+      };
+
+      document.getElementById('clearBtn').onclick = ()=>{ document.getElementById('chatLog').innerHTML=''; };
+    });
+    </script>
+  </body>
+</html>
