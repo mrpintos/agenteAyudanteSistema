@@ -93,8 +93,37 @@ def chat(payload: dict):
     if prompt is None:
         raise HTTPException(status_code=400, detail="Campo 'prompt' requerido")
 
-    # Añadir mensaje de usuario
-    agent.messages.append({"role": "user", "content": prompt})
+    # Manejar confirmaciones pendientes para comandos destructivos
+    if getattr(agent, 'pending_confirmation', None):
+        user_reply = prompt.strip().lower()
+        # Respuestas afirmativas
+        if user_reply in ("si", "sí", "si.", "sí.", "yes", "y"):
+            # Guardar el mensaje del usuario
+            agent.messages.append({"role": "user", "content": prompt})
+            pending = agent.pending_confirmation.get("command")
+            # Ejecutar el comando pendiente indicando que ya fue confirmado internamente
+            result = agent.handle_tool_call("execute_terminal_command", {"command": pending, "_confirmed": True})
+            # Asegurar que pending queda limpio para evitar bucles
+            agent.pending_confirmation = None
+
+            header = f"== execute_terminal_command ==\n"
+            params = json.dumps({"command": pending}, ensure_ascii=False, indent=2)
+            content = header + f"Parámetros: {params}\n" + (result if isinstance(result, str) else json.dumps(result, ensure_ascii=False))
+            agent.messages.append({"role": "tool", "content": content, "display_as": "code", "tool_calls": [{"type": "function", "function": {"name": "execute_terminal_command", "arguments": json.dumps({"command": pending}, ensure_ascii=False)}}]})
+        elif user_reply in ("no", "n", "no.", "n."):
+            # Cancelar la operación
+            agent.pending_confirmation = None
+            agent.messages.append({"role": "user", "content": prompt})
+            agent.messages.append({"role": "assistant", "content": "Operación cancelada por el usuario."})
+            # Responder de forma inmediata sin llamar al modelo
+            filtered_messages = [m for m in agent.messages if m.get("role") != "system"]
+            return JSONResponse({"ok": True, "model": MODEL, "response": "Operación cancelada por el usuario.", "messages": filtered_messages})
+        else:
+            # No es una confirmación clara; tratar como mensaje normal y enviarlo al modelo
+            agent.messages.append({"role": "user", "content": prompt})
+    else:
+        # Añadir mensaje de usuario
+        agent.messages.append({"role": "user", "content": prompt})
 
     # Llamadas repetidas si el modelo invoca herramientas
     last_assistant = None
