@@ -9,7 +9,7 @@ import json
 os.system('') if sys.platform == 'win32' else None
 
 load_dotenv()
-MODEL="openai/gpt-oss-20b"  # Modelo por defecto
+MODEL=os.getenv("MODEL_NAME_DEFAULT") # Modelo por defecto
 
 print(f"Mi primer agente de IA ({MODEL})")
 
@@ -18,8 +18,8 @@ agent = Agent()
 # --- CONFIGURACIÓN DEL CLIENTE (SIN CAMBIOS) ---
 # Apunta al servidor local de LM Studio (por defecto: puerto 1234)
 client = OpenAI(
-    base_url="http://localhost:1234/v1",
-    api_key="lm-studio"  # Clave de API de marcador de posición
+    base_url = os.environ.get("BASE_URL"),
+    api_key = os.environ.get("OPENAI_API_KEY")
 )
 
 # Códigos ANSI para colores

@@ -27,11 +27,14 @@ if not os.path.isdir(static_dir):
     os.makedirs(static_dir, exist_ok=True)
 APP.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Cliente OpenAI (apunta a LM Studio por defecto)
-client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
-
+# Cliente OpenAI (apunta a Ollama por defecto)
+client = OpenAI(
+    base_url=os.environ.get("BASE_URL"),
+    api_key=os.environ.get("OPENAI_API_KEY")
+)
+URL_MODELS = os.environ.get("BASE_URL") + "/models"
 # Modelo activo (valor por defecto)
-MODEL = os.environ.get("AGENT_MODEL", "deepseek-r1-0528-qwen3-8b")
+MODEL = os.environ.get("MODEL_NAME_DEFAULT", "gpt-oss:20b")
 
 agent = Agent()
 
@@ -53,7 +56,7 @@ def list_models():
         # Fallback: petición HTTP directa
         try:
             import requests
-            resp = requests.get("http://localhost:1234/v1/models", timeout=5)
+            resp = requests.get(URL_MODELS, timeout=5)
             resp.raise_for_status()
             data = resp.json()
             items = []
@@ -62,7 +65,8 @@ def list_models():
                     items.append(item.get("id") or item.get("name"))
                 else:
                     items.append(str(item))
-            return JSONResponse({"models": items, "source": "http://localhost:1234/v1/models"})
+            return JSONResponse({"models": items, "source": URL_MODELS})
+                     
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"No se pudieron listar los modelos: {e}")
 
@@ -92,6 +96,9 @@ def chat(payload: dict):
     prompt = payload.get("prompt") if payload else None
     if prompt is None:
         raise HTTPException(status_code=400, detail="Campo 'prompt' requerido")
+
+    # Mostrar el prompt recibido para ver trazabilidad.
+    print(f"\n👦 Usuario: {prompt}")
 
     # Manejar confirmaciones pendientes para comandos destructivos
     if getattr(agent, 'pending_confirmation', None):
