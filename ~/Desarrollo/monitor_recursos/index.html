@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard de Sistema</title>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        canvas { max-width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+
+<h1>Estado de la CPU y Memoria</h1>
+
+<canvas id="cpuChart"></canvas>
+<canvas id="memChart"></canvas>
+
+<script>
+// Configuración básica
+const ctxCpu = document.getElementById('cpuChart').getContext('2d');
+const ctxMem = document.getElementById('memChart').getContext('2d');
+
+let cpuChart = new Chart(ctxCpu, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: '% CPU', borderColor: '#ff6384', fill: false }] },
+    options: { responsive: true }
+});
+
+let memChart = new Chart(ctxMem, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: '% Memoria', borderColor: '#36a2eb', fill: false }] },
+    options: { responsive: true }
+});
+
+// Función para actualizar los gráficos
+async function updateCharts() {
+    const res = await fetch('data.json');
+    const json = await res.json();
+
+    // Ordenar por tiempo (en caso de que no lo esté)
+    json.sort((a, b) => a.time - b.time);
+
+    const labels = json.map(entry => new Date(entry.time * 1000).toLocaleTimeString());
+    const cpuData = json.map(entry => entry.cpu);
+    const memData = json.map(entry => entry.mem_pct);
+
+    // CPU
+    cpuChart.data.labels = labels;
+    cpuChart.data.datasets[0].data = cpuData;
+    cpuChart.update();
+
+    // Memoria
+    memChart.data.labels = labels;
+    memChart.data.datasets[0].data = memData;
+    memChart.update();
+}
+
+// Actualizar cada 5 segundos (igual que el script)
+setInterval(updateCharts, 5000);
+// Cargar la primera vez
+updateCharts();
+</script>
+</body>
+</html>
